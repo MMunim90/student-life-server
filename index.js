@@ -27,6 +27,7 @@ async function run() {
 
     //posts api
     const postsCollection = client.db("Brainbox").collection("posts");
+    const savedPostsCollection = client.db("Brainbox").collection("savedPosts");
 
     // posts.routes.js
 
@@ -86,6 +87,56 @@ async function run() {
           success: false,
           message: "Failed to fetch user posts",
         });
+      }
+    });
+
+    // Save a post
+    app.post("/savedPosts", async (req, res) => {
+      try {
+        const savedPost = req.body;
+
+        const existing = await savedPostsCollection.findOne({
+          postId: savedPost.postId,
+          posterEmail: savedPost.userEmail,
+        });
+
+        if (existing) {
+          return res
+            .status(400)
+            .send({ message: "You already saved this post" });
+        }
+
+        const result = await savedPostsCollection.insertOne(savedPost);
+        res.send(result);
+      } catch (error) {
+        console.error("Error saving post:", error);
+        res.status(500).send({ message: "Failed to save post" });
+      }
+    });
+
+    // Get all saved posts for a user
+    app.get("/savedPosts/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const query = { userEmail: email };
+        const result = await savedPostsCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching saved posts:", error);
+        res.status(500).send({ message: "Failed to fetch saved posts" });
+      }
+    });
+
+    // Delete a saved post
+    app.delete("/savedPosts/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await savedPostsCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        console.error("Error deleting saved post:", error);
+        res.status(500).send({ message: "Failed to delete saved post" });
       }
     });
 
