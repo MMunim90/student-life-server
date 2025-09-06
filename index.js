@@ -111,7 +111,7 @@ async function run() {
 
         // 2. Delete related saved posts
         const savedResult = await savedPostsCollection.deleteMany({
-          postId: id, // since you save postId as string
+          postId: id,
         });
 
         res.status(200).json({
@@ -172,6 +172,67 @@ async function run() {
       } catch (error) {
         console.error("Error deleting saved post:", error);
         res.status(500).send({ message: "Failed to delete saved post" });
+      }
+    });
+
+    // Like a post
+    app.post("/posts/:id/like", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { userEmail } = req.body;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ message: "Invalid post ID" });
+        }
+
+        const post = await postsCollection.findOne({ _id: new ObjectId(id) });
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        if (post.likes?.includes(userEmail)) {
+          return res
+            .status(400)
+            .json({ message: "You already liked this post" });
+        }
+
+        await postsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $push: { likes: userEmail } }
+        );
+
+        // Return the updated post
+        const updatedPost = await postsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        res.status(200).json(updatedPost);
+      } catch (error) {
+        console.error("Error liking post:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // Unlike a post
+    app.post("/posts/:id/unlike", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { userEmail } = req.body;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ message: "Invalid post ID" });
+        }
+
+        await postsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $pull: { likes: userEmail } }
+        );
+
+        // Return the updated post
+        const updatedPost = await postsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        res.status(200).json(updatedPost);
+      } catch (error) {
+        console.error("Error unliking post:", error);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
 
