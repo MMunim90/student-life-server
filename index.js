@@ -4,6 +4,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion } = require("mongodb");
 require("dotenv").config();
+const { ObjectId } = require("mongodb");
 
 //middleware
 app.use(cors());
@@ -87,6 +88,40 @@ async function run() {
           success: false,
           message: "Failed to fetch user posts",
         });
+      }
+    });
+
+    // DELETE a post by ID
+    app.delete("/posts/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ message: "Invalid post ID" });
+        }
+
+        // 1. Delete from posts collection
+        const result = await postsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Post not found" });
+        }
+
+        // 2. Delete related saved posts
+        const savedResult = await savedPostsCollection.deleteMany({
+          postId: id, // since you save postId as string
+        });
+
+        res.status(200).json({
+          message: "Post deleted successfully",
+          deletedFromPosts: result.deletedCount,
+          deletedFromSavedPosts: savedResult.deletedCount,
+        });
+      } catch (error) {
+        console.error("Error deleting post:", error);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
 
