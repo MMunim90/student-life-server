@@ -29,6 +29,7 @@ async function run() {
     //posts api
     const postsCollection = client.db("Brainbox").collection("posts");
     const savedPostsCollection = client.db("Brainbox").collection("savedPosts");
+    const scheduleCollection = client.db("Brainbox").collection("schedules");
 
     // posts.routes.js
 
@@ -233,6 +234,99 @@ async function run() {
       } catch (error) {
         console.error("Error unliking post:", error);
         res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // GET all schedules for a specific user
+    app.get("/schedules", async (req, res) => {
+      try {
+        const { email } = req.query;
+        if (!email)
+          return res.status(400).json({ message: "Email is required" });
+
+        const schedules = await scheduleCollection.find({ email }).toArray();
+        res.send(schedules);
+      } catch (error) {
+        console.error("Error fetching schedules:", error);
+        res.status(500).send({ message: "Failed to fetch schedules" });
+      }
+    });
+
+    // CREATE new schedule
+    app.post("/schedules", async (req, res) => {
+      try {
+        const schedule = req.body;
+        if (!schedule.email)
+          return res.status(400).json({ message: "Email is required" });
+
+        const result = await scheduleCollection.insertOne(schedule);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error("Error creating schedule:", error);
+        res.status(500).send({ message: "Failed to create schedule" });
+      }
+    });
+
+    // UPDATE schedule (only if email matches)
+    app.patch("/schedules/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updated = req.body;
+
+        if (!ObjectId.isValid(id))
+          return res.status(400).json({ message: "Invalid schedule ID" });
+        if (!updated.email)
+          return res.status(400).json({ message: "Email is required" });
+
+        // Update only if the schedule belongs to this user
+        const result = await scheduleCollection.updateOne(
+          { _id: new ObjectId(id), email: updated.email },
+          { $set: updated }
+        );
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(403)
+            .json({
+              message: "You are not authorized to update this schedule",
+            });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating schedule:", error);
+        res.status(500).send({ message: "Failed to update schedule" });
+      }
+    });
+
+    // DELETE schedule (only if email matches)
+    app.delete("/schedules/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { email } = req.query;
+
+        if (!ObjectId.isValid(id))
+          return res.status(400).json({ message: "Invalid schedule ID" });
+        if (!email)
+          return res.status(400).json({ message: "Email is required" });
+
+        const result = await scheduleCollection.deleteOne({
+          _id: new ObjectId(id),
+          email,
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(403)
+            .json({
+              message: "You are not authorized to delete this schedule",
+            });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error deleting schedule:", error);
+        res.status(500).send({ message: "Failed to delete schedule" });
       }
     });
 
