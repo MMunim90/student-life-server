@@ -34,6 +34,7 @@ async function run() {
       .db("Brainbox")
       .collection("transactions");
     const tasksCollection = client.db("Brainbox").collection("tasks");
+    const skillsCollection = client.db("Brainbox").collection("skills");
 
     // posts.routes.js
 
@@ -449,6 +450,86 @@ async function run() {
       } catch (err) {
         console.error("Error deleting task:", err);
         res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // GET all skills for a user
+    app.get("/skills", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email)
+          return res.status(400).json({ message: "Email is required" });
+
+        const skills = await skillsCollection
+          .find({ email })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.send(skills);
+      } catch (err) {
+        res.status(500).json({ message: err.message });
+      }
+    });
+
+    // POST new skill
+    app.post("/skills", async (req, res) => {
+      try {
+        const { email, skill, goal, milestone } = req.body;
+        if (!email || !skill || !goal) {
+          return res
+            .status(400)
+            .json({ message: "Email, skill, and goal are required" });
+        }
+
+        const doc = {
+          email,
+          skill,
+          goal,
+          milestone: milestone || "",
+          createdAt: new Date(),
+        };
+
+        const result = await skillsCollection.insertOne(doc);
+        res.send(result);
+      } catch (err) {
+        res.status(500).json({ message: err.message });
+      }
+    });
+
+    // DELETE a skill
+    app.delete("/skills/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await skillsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      } catch (err) {
+        res.status(500).json({ message: err.message });
+      }
+    });
+
+    // UPDATE skill status (mark as completed or update milestone/goal)
+    app.patch("/skills/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status, milestone, goal } = req.body;
+
+        const updateDoc = {
+          $set: {},
+        };
+
+        if (status) updateDoc.$set.status = status;
+        if (milestone) updateDoc.$set.milestone = milestone;
+        if (goal) updateDoc.$set.goal = goal;
+
+        const result = await skillsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          updateDoc
+        );
+        res.send(result);
+      } catch (err) {
+        res.status(500).json({ message: err.message });
       }
     });
 
