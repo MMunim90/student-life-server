@@ -30,6 +30,9 @@ async function run() {
     const postsCollection = client.db("Brainbox").collection("posts");
     const savedPostsCollection = client.db("Brainbox").collection("savedPosts");
     const scheduleCollection = client.db("Brainbox").collection("schedules");
+    const transactionsCollection = client
+      .db("Brainbox")
+      .collection("transactions");
 
     // posts.routes.js
 
@@ -285,11 +288,9 @@ async function run() {
         );
 
         if (result.matchedCount === 0) {
-          return res
-            .status(403)
-            .json({
-              message: "You are not authorized to update this schedule",
-            });
+          return res.status(403).json({
+            message: "You are not authorized to update this schedule",
+          });
         }
 
         res.send(result);
@@ -316,17 +317,72 @@ async function run() {
         });
 
         if (result.deletedCount === 0) {
-          return res
-            .status(403)
-            .json({
-              message: "You are not authorized to delete this schedule",
-            });
+          return res.status(403).json({
+            message: "You are not authorized to delete this schedule",
+          });
         }
 
         res.send(result);
       } catch (error) {
         console.error("Error deleting schedule:", error);
         res.status(500).send({ message: "Failed to delete schedule" });
+      }
+    });
+
+    // Get last 5 transactions for a user
+    app.get("/transactions/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const transactions = await transactionsCollection
+          .find({ email })
+          .sort({ date: -1 })
+          .toArray();
+        res.send(transactions);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to fetch transactions" });
+      }
+    });
+
+    // Add new transaction
+    app.post("/transactions", async (req, res) => {
+      try {
+        const transaction = req.body;
+
+        // insertOne returns { acknowledged, insertedId }
+        const result = await transactionsCollection.insertOne(transaction);
+
+        // fetch the inserted doc to return it
+        const insertedDoc = await transactionsCollection.findOne({
+          _id: result.insertedId,
+        });
+
+        res.send(insertedDoc);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to add transaction" });
+      }
+    });
+
+    // DELETE a transaction by id
+    app.delete("/transactions/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await transactionsCollection.deleteOne(query);
+
+        if (result.deletedCount === 1) {
+          res
+            .status(200)
+            .send({ success: true, message: "Transaction deleted" });
+        } else {
+          res
+            .status(404)
+            .send({ success: false, message: "Transaction not found" });
+        }
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: "Server error" });
       }
     });
 
