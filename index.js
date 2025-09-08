@@ -33,6 +33,7 @@ async function run() {
     const transactionsCollection = client
       .db("Brainbox")
       .collection("transactions");
+    const tasksCollection = client.db("Brainbox").collection("tasks");
 
     // posts.routes.js
 
@@ -383,6 +384,71 @@ async function run() {
       } catch (err) {
         console.error(err);
         res.status(500).send({ success: false, message: "Server error" });
+      }
+    });
+
+    //  Get tasks by email
+    app.get("/tasks", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email) {
+          return res.status(400).json({ message: "Email is required" });
+        }
+
+        const tasks = await tasksCollection.find({ email }).toArray();
+        res.json(tasks);
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    //  Add a new task
+    app.post("/tasks", async (req, res) => {
+      try {
+        const task = req.body;
+        if (!task.subject || !task.deadline || !task.email) {
+          return res.status(400).json({ message: "Missing required fields" });
+        }
+
+        const result = await tasksCollection.insertOne(task);
+        res.json({ insertedId: result.insertedId });
+      } catch (err) {
+        console.error("Error adding task:", err);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    //  Update task (toggle complete or edit)
+    app.patch("/tasks/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updatedFields = req.body;
+
+        const result = await tasksCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedFields }
+        );
+
+        res.json({ modifiedCount: result.modifiedCount });
+      } catch (err) {
+        console.error("Error updating task:", err);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    //  Delete a task
+    app.delete("/tasks/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await tasksCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.json({ deletedCount: result.deletedCount });
+      } catch (err) {
+        console.error("Error deleting task:", err);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
 
