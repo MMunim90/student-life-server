@@ -420,18 +420,37 @@ async function run() {
       }
     });
 
-    //  Update task (toggle complete or edit)
+    // Update task (edit task details)
     app.patch("/tasks/:id", async (req, res) => {
       try {
         const { id } = req.params;
-        const updatedFields = req.body;
+        const { subject, priority, deadline, hour } = req.body;
+
+        // Validate ID
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ message: "Invalid task ID" });
+        }
+
+        // Only update the provided fields
+        const updatedFields = {};
+        if (subject !== undefined) updatedFields.subject = subject;
+        if (priority !== undefined) updatedFields.priority = priority;
+        if (deadline !== undefined) updatedFields.deadline = deadline;
+        if (hour !== undefined) updatedFields.hour = hour;
 
         const result = await tasksCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: updatedFields }
         );
 
-        res.json({ modifiedCount: result.modifiedCount });
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "Task not found" });
+        }
+
+        res.json({
+          modifiedCount: result.modifiedCount,
+          message: "Task updated successfully",
+        });
       } catch (err) {
         console.error("Error updating task:", err);
         res.status(500).json({ message: "Internal server error" });
@@ -471,10 +490,11 @@ async function run() {
       }
     });
 
-    // POST new skill
+    // POST route
     app.post("/skills", async (req, res) => {
       try {
-        const { email, skill, goal, milestone } = req.body;
+        const { email, skill, goal, milestone, progress, startDate, endDate } =
+          req.body;
         if (!email || !skill || !goal) {
           return res
             .status(400)
@@ -486,6 +506,10 @@ async function run() {
           skill,
           goal,
           milestone: milestone || "",
+          progress: Number(progress) || 0,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          status: "in-progress",
           createdAt: new Date(),
         };
 
@@ -509,19 +533,20 @@ async function run() {
       }
     });
 
-    // UPDATE skill status (mark as completed or update milestone/goal)
+    // PATCH route
     app.patch("/skills/:id", async (req, res) => {
       try {
         const id = req.params.id;
-        const { status, milestone, goal } = req.body;
+        const { status, milestone, goal, progress, startDate, endDate } =
+          req.body;
 
-        const updateDoc = {
-          $set: {},
-        };
-
+        const updateDoc = { $set: {} };
         if (status) updateDoc.$set.status = status;
         if (milestone) updateDoc.$set.milestone = milestone;
         if (goal) updateDoc.$set.goal = goal;
+        if (progress !== undefined) updateDoc.$set.progress = Number(progress);
+        if (startDate) updateDoc.$set.startDate = startDate;
+        if (endDate) updateDoc.$set.endDate = endDate;
 
         const result = await skillsCollection.updateOne(
           { _id: new ObjectId(id) },
