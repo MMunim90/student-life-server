@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion } = require("mongodb");
 require("dotenv").config();
 const { ObjectId } = require("mongodb");
@@ -35,6 +35,9 @@ async function run() {
       .collection("transactions");
     const tasksCollection = client.db("Brainbox").collection("tasks");
     const skillsCollection = client.db("Brainbox").collection("skills");
+    const examRoutineCollection = client
+      .db("Brainbox")
+      .collection("examRoutines");
 
     // posts.routes.js
 
@@ -420,23 +423,24 @@ async function run() {
       }
     });
 
-    // Update task (edit task details)
+    // Update task (edit details or toggle complete)
     app.patch("/tasks/:id", async (req, res) => {
       try {
         const { id } = req.params;
-        const { subject, priority, deadline, hour } = req.body;
+        const { subject, priority, deadline, hour, isCompleted } = req.body;
 
         // Validate ID
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ message: "Invalid task ID" });
         }
 
-        // Only update the provided fields
+        // Only update provided fields
         const updatedFields = {};
         if (subject !== undefined) updatedFields.subject = subject;
         if (priority !== undefined) updatedFields.priority = priority;
         if (deadline !== undefined) updatedFields.deadline = deadline;
         if (hour !== undefined) updatedFields.hour = hour;
+        if (isCompleted !== undefined) updatedFields.isCompleted = isCompleted;
 
         const result = await tasksCollection.updateOne(
           { _id: new ObjectId(id) },
@@ -555,6 +559,99 @@ async function run() {
         res.send(result);
       } catch (err) {
         res.status(500).json({ message: err.message });
+      }
+    });
+
+    // CREATE (Add new exam routine)
+    app.post("/exam-routines", async (req, res) => {
+      try {
+        const routine = req.body;
+        if (!routine.email) {
+          return res.status(400).send({ error: "User email is required" });
+        }
+        const result = await examRoutineCollection.insertOne(routine);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Failed to add routine" });
+      }
+    });
+
+    // READ (Get all exam routines for a specific user)
+    app.get("/exam-routines", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email) {
+          return res.status(400).send({ error: "User email is required" });
+        }
+        const routines = await examRoutineCollection.find({ email }).toArray();
+        res.send(routines);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Failed to fetch routines" });
+      }
+    });
+
+    // UPDATE (Edit exam routine or mark as done)
+    app.patch("/exam-routines/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedRoutine = req.body;
+
+        if (!updatedRoutine.email) {
+          return res.status(400).send({ error: "User email is required" });
+        }
+
+        const filter = { _id: new ObjectId(id), email: updatedRoutine.email };
+        const updateDoc = {
+          $set: {
+            courseName: updatedRoutine.courseName,
+            courseCode: updatedRoutine.courseCode,
+            examDate: updatedRoutine.examDate,
+            examTime: updatedRoutine.examTime,
+            building: updatedRoutine.building,
+            roomNumber: updatedRoutine.roomNumber,
+            status: updatedRoutine.status || "pending", // add this
+          },
+        };
+
+        const result = await examRoutineCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ error: "Routine not found or not authorized" });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Failed to update routine" });
+      }
+    });
+
+    // DELETE (Remove exam routine - only if it belongs to the user)
+    app.delete("/exam-routines/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const email = req.query.email; // User email must be sent as query param
+        if (!email) {
+          return res.status(400).send({ error: "User email is required" });
+        }
+
+        const query = { _id: new ObjectId(id), email };
+        const result = await examRoutineCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ error: "Routine not found or not authorized" });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Failed to delete routine" });
       }
     });
 
