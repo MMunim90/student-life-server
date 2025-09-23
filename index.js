@@ -163,7 +163,8 @@ async function run() {
       try {
         const email = req.params.email;
         const query = { userEmail: email };
-        const result = await savedPostsCollection.find(query).toArray();
+        const result = await savedPostsCollection.find(query).sort({ createdAt: 1 }).toArray();
+
         res.send(result);
       } catch (error) {
         console.error("Error fetching saved posts:", error);
