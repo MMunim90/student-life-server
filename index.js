@@ -2,13 +2,29 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
-const { ObjectId } = require("mongodb");
 
 //middleware
-app.use(cors());
+app.use(cors(
+  {
+    origin: [
+      "http://localhost:5173",
+      "https://student-life-ee6e3.web.app",
+    ],
+    credentials: true,
+  }
+));
 app.use(express.json());
+
+var admin = require("firebase-admin");
+
+var serviceAccount = require("./firebase-admin-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.5tlsytf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -20,6 +36,26 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+// middleware
+const verifyFireBaseToken = async (req, res, next) => {
+  const authHeader = req?.headers?.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')){
+    return res.status(401).send({ message: "Unauthorized Access!" })
+  }; 
+
+  const token = authHeader.split(' ')[1];
+
+  try{
+    const decoded = await admin.auth().verifyIdToken(token)
+    // console.log("decoded token", decoded)
+    req.decoded = decoded;
+    next();
+  }catch(err){
+    return res.status(401).send({ message: "Unauthorized Access!" })
+  }
+};
 
 async function run() {
   try {
@@ -64,7 +100,7 @@ async function run() {
     });
 
     // Get all posts
-    app.get("/getAllPosts", async (req, res) => {
+    app.get("/getAllPosts", verifyFireBaseToken, async (req, res) => {
       try {
         const posts = await postsCollection
           .find({})
@@ -82,7 +118,7 @@ async function run() {
     });
 
     // Get posts by user email
-    app.get("/getUserPosts/:email", async (req, res) => {
+    app.get("/getUserPosts/:email", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.params.email;
         const posts = await postsCollection
@@ -159,11 +195,11 @@ async function run() {
     });
 
     // Get all saved posts for a user
-    app.get("/savedPosts/:email", async (req, res) => {
+    app.get("/savedPosts/:email", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.params.email;
         const query = { userEmail: email };
-        const result = await savedPostsCollection.find(query).sort({ createdAt: 1 }).toArray();
+        const result = await savedPostsCollection.find(query).sort({ createdAt: -1 }).toArray();
 
         res.send(result);
       } catch (error) {
@@ -247,7 +283,7 @@ async function run() {
     });
 
     // GET all schedules for a specific user
-    app.get("/schedules", async (req, res) => {
+    app.get("/schedules", verifyFireBaseToken, async (req, res) => {
       try {
         const { email } = req.query;
         if (!email)
@@ -336,7 +372,7 @@ async function run() {
     });
 
     // Get last 5 transactions for a user
-    app.get("/transactions/:email", async (req, res) => {
+    app.get("/transactions/:email", verifyFireBaseToken, async (req, res) => {
       try {
         const { email } = req.params;
         const transactions = await transactionsCollection
@@ -393,7 +429,7 @@ async function run() {
     });
 
     //  Get tasks by email
-    app.get("/tasks", async (req, res) => {
+    app.get("/tasks", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.query.email;
         if (!email) {
@@ -478,7 +514,7 @@ async function run() {
     });
 
     // GET all skills for a user
-    app.get("/skills", async (req, res) => {
+    app.get("/skills", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.query.email;
         if (!email)
@@ -579,7 +615,7 @@ async function run() {
     });
 
     // READ (Get all exam routines for a specific user)
-    app.get("/exam-routines", async (req, res) => {
+    app.get("/exam-routines", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.query.email;
         if (!email) {
